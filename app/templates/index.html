@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini App Flask</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="container mt-5">
+    <h1 class="mb-4 text-center">Definición de Bits</h1>
+
+    <form action="/add" method="POST" class="d-flex mb-4">
+        <input type="text" name="definicion" placeholder="Definición" class="form-control me-2" required>
+        <button type="submit" class="btn btn-success">Agregar</button>
+    </form>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Estado</th>
+                <th>Topicos</th>
+                <th>Tipo</th>
+                <th>Definición</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.id }}</td>
+                <td>{{ item.estado }}</td>
+                <td>{{ item.topico }}</td>
+                <td>{{ item.tipo }}</td>
+                <td>{{ item.definicion }}</td>
+                <td>
+                    <a href="/delete/{{ item.id }}" class="btn btn-danger btn-sm">Eliminar</a>
+                    
+                    <!-- Formulario para cambiar el estado -->
+                    <form action="/change/{{ item.id }}" method="POST" class="d-inline">
+                        <input type="hidden" name="estado" value="{{ item.estado }}">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            Cambiar a {{ 'Inactivo' if item.estado == 1 else 'Activo' }}
+                        </button>
+                    </form>
+
+                    <!-- Formulario para actualizar el topico -->
+                    <form action="/item/topico/{{ item.id }}" method="POST" class="d-inline">
+                        <input type="text" name="topico" placeholder="Nuevo Topico" class="form-control-sm" value="{{ item.topico }}">
+                        <button type="submit" class="btn btn-info btn-sm">Actualizar Topico</button>
+                    </form>
+
+                    <!-- Formulario para actualizar el tipo -->
+                    <form action="/item/tipo/{{ item.id }}" method="POST" class="d-inline">
+                        <input type="text" name="tipo" placeholder="Nuevo Tipo" class="form-control-sm" value="{{ item.tipo }}">
+                        <button type="submit" class="btn btn-secondary btn-sm">Actualizar Tipo</button>
+                    </form>
+
+                    <!-- Formulario para enviar el mensaje -->
+                    <form action="/send" method="POST" class="d-inline">
+                        <input type="hidden" name="definicion" value="{{ item.definicion }}">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            SEND
+                        </button>
+                    </form>
+
+                    <!-- Formulario para actualizar la definición -->
+                    <a href="/update/{{ item.id }}" class="btn btn-success btn-sm">Actualizar</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-muted text-center">No hay ítems</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
