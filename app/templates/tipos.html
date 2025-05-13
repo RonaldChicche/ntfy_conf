@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestión de Tipos{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Tipos</h1>
+
+<!-- Formulario para agregar un tipo -->
+<form action="/tipos/add" method="POST" class="d-flex mb-4">
+    <input type="text" name="nombre" placeholder="Nombre del tipo" class="form-control me-2" required>
+    <input type="text" name="descripcion" placeholder="Descripción" class="form-control me-2">
+    <button type="submit" class="btn btn-primary">Agregar</button>
+</form>
+
+<!-- Lista de tipos -->
+<ul class="list-group">
+    {% for tipo in tipos %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+            <strong>{{ tipo.tipo }}</strong> — {{ tipo.descripcion }}
+        </div>
+        <a href="/tipos/delete/{{ tipo.id }}" class="btn btn-danger btn-sm">Eliminar</a>
+    </li>
+    {% else %}
+    <li class="list-group-item text-muted">No hay tipos registrados</li>
+    {% endfor %}
+</ul>
+{% endblock %}

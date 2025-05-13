@@ -1,0 +1,54 @@
+{% for item in items %}
+<div class="modal fade" id="modalItem{{ item.id }}" tabindex="-1" aria-labelledby="modalLabel{{ item.id }}" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form action="/update/{{ item.id }}" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalLabel{{ item.id }}">Editar Ítem #{{ item.id }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="estadoSwitch{{ item.id }}" name="estado"
+                   value="1" {% if item.estado == '1' %}checked{% endif %}>
+            <label class="form-check-label" for="estadoSwitch{{ item.id }}">Estado Activo</label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Tópico</label>
+            <select name="topico_id" class="form-select">
+              <option value="">No definido</option>
+              {% for topico in topicos %}
+              <option value="{{ topico.id }}" {% if item.topico_id == topico.id %}selected{% endif %}>
+                {{ topico.topico }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Tipo</label>
+            <select name="tipo_id" class="form-select">
+              <option value="">No definido</option>
+              {% for tipo in tipos %}
+              <option value="{{ tipo.id }}" {% if item.tipo_id == tipo.id %}selected{% endif %}>
+                {{ tipo.tipo }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Definición</label>
+            <textarea name="new_definicion" class="form-control" rows="5" required>{{ item.definicion }}</textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}

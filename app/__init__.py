@@ -1,9 +1,11 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from dotenv import load_dotenv
 import os
 
 db = SQLAlchemy()
+migrate = Migrate()
 
 def create_app():
     load_dotenv()  # Carga variables del .env
@@ -12,6 +14,7 @@ def create_app():
     app.config.from_object('app.config.Config')
 
     db.init_app(app)
+    migrate.init_app(app, db)
 
     from app.routes import main
     app.register_blueprint(main)

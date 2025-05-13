@@ -1,5 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify
 from app.models import db, Item, Topico, Tipo
+
+import requests
 
 main = Blueprint('main', __name__)
 
@@ -8,7 +10,9 @@ main = Blueprint('main', __name__)
 @main.route('/')
 def index():
     items = Item.query.all()
-    return render_template('index.html', items=items)
+    topicos = Topico.query.all()
+    tipos = Tipo.query.all()
+    return render_template('index.html', items=items, topicos=topicos, tipos=tipos)
 
 @main.route('/add', methods=['POST'])
 def add_item():
@@ -27,30 +31,32 @@ def delete_item(id):
 
 @main.route('/update/<int:item_id>', methods=['POST'])
 def update_item(item_id):
-    new_def = request.form.get('new_definicion', '')
-    item = Item.query.get(item_id)  
+    item = Item.query.get(item_id)
     if item:
-        item.definicion = new_def  
-        db.session.commit()  
-        return jsonify({'status': 'ok', 'id': item_id, 'new_definicion': new_def})
+        item.definicion = request.form.get('new_definicion', item.definicion)
+        item.estado = '1' if request.form.get('estado') == '1' else '0'
+        item.topico_id = int(request.form.get('topico_id')) if request.form.get('topico_id') else None
+        item.tipo_id = int(request.form.get('tipo_id')) if request.form.get('tipo_id') else None
+        db.session.commit()
+        return redirect('/')
     return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
 
 @main.route('/item/topico/<int:item_id>', methods=['POST'])
 def update_item_topico(item_id):
-    topico = request.form.get('topico')
+    topico_id = request.form.get('topico_id')
     item = Item.query.get(item_id)  
     if item:
-        item.topico = topico  
-        db.session.commit() 
-        return redirect('/')  
+        item.topico_id = int(topico_id) if topico_id else None
+        db.session.commit()
+        return redirect('/') 
     return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
 
 @main.route('/item/tipo/<int:item_id>', methods=['POST'])
 def update_item_tipo(item_id):
-    tipo = request.form.get('tipo')
+    tipo_id = request.form.get('tipo_id')
     item = Item.query.get(item_id)  
     if item:
-        item.tipo = tipo  
+        item.tipo_id = int(tipo_id) if tipo_id else None  
         db.session.commit()  
         return redirect('/')  
     return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
@@ -70,36 +76,40 @@ def change_item(item_id):
     else:
         return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
 
-
-# @app.route('/send', methods=['POST'])
-# def send_msg():
-#     definicion = request.form.get('definicion', '').strip()
-#     topico = 'mantenimiento'
-#     print(f"{NTFY_URL}{topico}", "--->", definicion)
-#     try:
-#         r = requests.post(f"{NTFY_URL}{topico}", data=definicion.encode('utf-8'))
-#         r.raise_for_status()
-#     except requests.exceptions.RequestException as e:
-#         return jsonify({'error': str(e)}), 500
-
-#     return jsonify({'status': 'mensaje enviado', 'topico': topico}), 200
-
 @main.route('/send', methods=['POST'])
 def send_definicion():
     item_id = request.form.get('item_id')
+
+    if not item_id:
+        print("❌ No se proporcionó item_id")
+        return jsonify({'status': 'error', 'message': 'ID no proporcionado'}), 400
+
     item = Item.query.get(item_id)
+    if not item:
+        print(f"❌ Item con ID {item_id} no encontrado")
+        return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
 
-    if item:
-        topico = item.topico or 'mantenimiento'
-        mensaje = f"{topico}: {item.definicion}"
-        print(topico, mensaje)
+    topico = item.topico_rel.topico if item.topico_rel else 'mantenimiento'
+    tipo = item.tipo_rel.descripcion if item.tipo_rel else 'mantenimiento'
+    mensaje = f"{tipo}: {item.definicion}"
 
-        try:
-            requests.post(Config.NTFY_URL, data=mensaje.encode('utf-8'))
-        except Exception as e:
-            print(f"Error al enviar notificación: {e}")
+    # 🔍 Para pruebas: muestra lo que se enviaría
+    print("📤 MENSAJE A ENVIAR:")
+    print("TOPICO:", topico)
+    print("CONTENIDO:", mensaje)
+
+    # 🚫 Comentado para pruebas
+    # try:
+    #     import requests
+    #     response = requests.post(Config.NTFY_URL, data=mensaje.encode('utf-8'))
+    #     response.raise_for_status()
+    #     print("✅ Mensaje enviado a ntfy")
+    # except Exception as e:
+    #     print(f"❌ Error al enviar notificación: {e}")
+    #     return jsonify({'status': 'error', 'message': str(e)}), 500
 
     return redirect('/')
+
 
 # Topicos CRUD --------------------------------------------------
 @main.route('/topicos')
@@ -111,7 +121,7 @@ def ver_topicos():
 def agregar_topico():
     nombre = request.form["nombre"]
     descripcion = request.form.get("descripcion", "")
-    new_topico = Topico(nombre_topico=nombre, descripcion=descripcion)
+    new_topico = Topico(topico=nombre, descripcion=descripcion)
     db.session.add(new_topico)
     db.session.commit()
     return redirect("/topicos")
@@ -133,7 +143,7 @@ def ver_tipos():
 def agregar_tipo():
     nombre = request.form["nombre"]
     descripcion = request.form.get("descripcion", "")
-    new_tipo = Tipo(nombre_tipo=nombre, descripcion=descripcion)
+    new_tipo = Tipo(tipo=nombre, descripcion=descripcion)
     db.session.add(new_tipo)
     db.session.commit()
     return redirect("/tipos")
