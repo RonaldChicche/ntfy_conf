@@ -2,6 +2,8 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from dotenv import load_dotenv
+from app.utils import insertar_prioridades
+
 import os
 
 db = SQLAlchemy()
@@ -21,5 +23,6 @@ def create_app():
 
     with app.app_context():
         db.create_all()  # Crea las tablas si no existen
+        insertar_prioridades()
 
     return app

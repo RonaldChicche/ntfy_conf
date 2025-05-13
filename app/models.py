@@ -32,4 +32,14 @@ class Tipo(db.Model):
     __tablename__ = 'tipos'
     id = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.String(3), unique=True, nullable=False)
+    prioridad_id = db.Column(db.Integer, db.ForeignKey('prioridades.id'), nullable=False)
     descripcion = db.Column(db.Text)
+    
+    prioridad = db.relationship('Prioridad')
+
+class Prioridad(db.Model):
+    __tablename__ = 'prioridades'
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(20), nullable=False)
+    descripcion = db.Column(db.Text)
+    icono = db.Column(db.String(50), nullable=True)  # nombre de ícono (opcional)

@@ -9,20 +9,84 @@
 <form action="/tipos/add" method="POST" class="d-flex mb-4">
     <input type="text" name="nombre" placeholder="Nombre del tipo" class="form-control me-2" required>
     <input type="text" name="descripcion" placeholder="Descripción" class="form-control me-2">
+    <select name="prioridad_id" class="form-select" required>
+    {% for p in prioridades %}
+      <option value="{{ p.id }}">{{ p.nombre }}</option>
+    {% endfor %}
+  </select>
     <button type="submit" class="btn btn-primary">Agregar</button>
 </form>
 
 <!-- Lista de tipos -->
-<ul class="list-group">
+<!-- Tabla de tipos -->
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nombre</th>
+      <th>Descripción</th>
+      <th>Prioridad</th>
+      <th>Editar</th>
+    </tr>
+  </thead>
+  <tbody>
     {% for tipo in tipos %}
-    <li class="list-group-item d-flex justify-content-between align-items-center">
-        <div>
-            <strong>{{ tipo.tipo }}</strong> — {{ tipo.descripcion }}
+    <tr>
+      <td>{{ tipo.id }}</td>
+      <td>{{ tipo.tipo }}</td>
+      <td>{{ tipo.descripcion }}</td>
+      <td>
+        <form action="/tipos/update_prioridad/{{ tipo.id }}" method="POST">
+          <select name="prioridad_id" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for p in prioridades %}
+              <option value="{{ p.id }}" {% if tipo.prioridad_id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+            {% endfor %}
+          </select>
+        </form>
+      </td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalTipo{{ tipo.id }}">
+          Editar
+        </button>
+      </td>
+    </tr>
+
+    <!-- Modal de edición -->
+    <div class="modal fade" id="modalTipo{{ tipo.id }}" tabindex="-1" aria-labelledby="modalTipoLabel{{ tipo.id }}" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form action="/tipos/update/{{ tipo.id }}" method="POST">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalTipoLabel{{ tipo.id }}">Editar Tipo</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label">Nombre</label>
+                <input type="text" name="nombre" value="{{ tipo.tipo }}" class="form-control" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Descripción</label>
+                <input type="text" name="descripcion" value="{{ tipo.descripcion }}" class="form-control">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Prioridad</label>
+                <select name="prioridad_id" class="form-select">
+                  {% for p in prioridades %}
+                    <option value="{{ p.id }}" {% if tipo.prioridad_id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+          </form>
         </div>
-        <a href="/tipos/delete/{{ tipo.id }}" class="btn btn-danger btn-sm">Eliminar</a>
-    </li>
-    {% else %}
-    <li class="list-group-item text-muted">No hay tipos registrados</li>
+      </div>
+    </div>
     {% endfor %}
-</ul>
+  </tbody>
+</table>
 {% endblock %}

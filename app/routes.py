@@ -1,7 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify
-from app.models import db, Item, Topico, Tipo
+from app.models import db, Item, Topico, Tipo, Prioridad
+from app.config import Config
 
 import requests
+import json
 
 main = Blueprint('main', __name__)
 
@@ -12,7 +14,8 @@ def index():
     items = Item.query.all()
     topicos = Topico.query.all()
     tipos = Tipo.query.all()
-    return render_template('index.html', items=items, topicos=topicos, tipos=tipos)
+    prioridades = Prioridad.query.all()
+    return render_template('index.html', items=items, topicos=topicos, tipos=tipos, prioridades=prioridades)
 
 @main.route('/add', methods=['POST'])
 def add_item():
@@ -89,24 +92,32 @@ def send_definicion():
         print(f"❌ Item con ID {item_id} no encontrado")
         return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
 
-    topico = item.topico_rel.topico if item.topico_rel else 'mantenimiento'
-    tipo = item.tipo_rel.descripcion if item.tipo_rel else 'mantenimiento'
-    mensaje = f"{tipo}: {item.definicion}"
+    topico = item.topico_rel.descripcion if item.topico_rel else 'mantenimiento'
+    tipo = item.tipo_rel
+    titulo = tipo.descripcion if tipo else "Notificación"
+    prioridad = tipo.prioridad_id if tipo and tipo.prioridad_id else 3
+
+    payload = {
+        "topic": topico,
+        "message": item.definicion,
+        "title": titulo,
+        "priority": prioridad
+    }
 
     # 🔍 Para pruebas: muestra lo que se enviaría
-    print("📤 MENSAJE A ENVIAR:")
-    print("TOPICO:", topico)
-    print("CONTENIDO:", mensaje)
+    # 🧪 Imprimir el JSON antes de enviar
+    print("📤 JSON A ENVIAR:")
+    print(json.dumps(payload, indent=2))
 
     # 🚫 Comentado para pruebas
-    # try:
-    #     import requests
-    #     response = requests.post(Config.NTFY_URL, data=mensaje.encode('utf-8'))
-    #     response.raise_for_status()
-    #     print("✅ Mensaje enviado a ntfy")
-    # except Exception as e:
-    #     print(f"❌ Error al enviar notificación: {e}")
-    #     return jsonify({'status': 'error', 'message': str(e)}), 500
+    try:
+        import requests
+        response = requests.post(Config.NTFY_URL, data=json.dumps(payload), headers={"Content-Type": "application/json"})
+        response.raise_for_status()
+        print("✅ Mensaje enviado a ntfy")
+    except Exception as e:
+        print(f"❌ Error al enviar notificación: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
     return redirect('/')
 
@@ -115,7 +126,8 @@ def send_definicion():
 @main.route('/topicos')
 def ver_topicos():
     topicos = Topico.query.all()
-    return render_template('topicos.html', topicos=topicos)
+    prioridades = Prioridad.query.all()
+    return render_template('topicos.html', topicos=topicos, prioridades=prioridades)
 
 @main.route("/topicos/add", methods=["POST"])
 def agregar_topico():
@@ -137,13 +149,16 @@ def eliminar_topico(id):
 @main.route('/tipos')
 def ver_tipos():
     tipos = Tipo.query.all()
-    return render_template('tipos.html', tipos=tipos)
+    prioridades = Prioridad.query.all()
+    return render_template('tipos.html', tipos=tipos, prioridades=prioridades)
 
 @main.route("/tipos/add", methods=["POST"])
 def agregar_tipo():
     nombre = request.form["nombre"]
     descripcion = request.form.get("descripcion", "")
-    new_tipo = Tipo(tipo=nombre, descripcion=descripcion)
+    prioridad_id = request.form.get("prioridad_id", type=int)
+
+    new_tipo = Tipo(tipo=nombre, descripcion=descripcion, prioridad_id=prioridad_id)
     db.session.add(new_tipo)
     db.session.commit()
     return redirect("/tipos")
@@ -152,5 +167,25 @@ def agregar_tipo():
 def eliminar_tipo(id):
     tipo_to_delete = Tipo.query.get(id)
     db.session.delete(tipo_to_delete)
+    db.session.commit()
+    return redirect("/tipos")
+
+@main.route("/tipos/update/<int:id>", methods=["POST"])
+def actualizar_tipo(id):
+    tipo = Tipo.query.get_or_404(id)
+
+    tipo.tipo = request.form.get("nombre", tipo.tipo)
+    tipo.descripcion = request.form.get("descripcion", tipo.descripcion)
+    tipo.prioridad_id = request.form.get("prioridad_id", type=int)
+
+    db.session.commit()
+    return redirect("/tipos")
+
+@main.route("/tipos/update_prioridad/<int:id>", methods=["POST"])
+def actualizar_prioridad_tipo(id):
+    tipo = Tipo.query.get_or_404(id)
+    nueva_prioridad = request.form.get("prioridad_id", type=int)
+
+    tipo.prioridad_id = nueva_prioridad
     db.session.commit()
     return redirect("/tipos")
