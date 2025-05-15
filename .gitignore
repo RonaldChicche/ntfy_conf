@@ -1,0 +1,14 @@
+# Entorno python
+*.pyc
+__pycache__/
+*.pyo 
+*pyd
+
+# Temporales
+*.log
+*.tmp
+
+# De editor
+.vscode/
+.idea/
+
