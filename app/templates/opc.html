@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Conexión OPC UA{% endblock %}
+
+{% block content %}
+<h3>Conectar a un servidor OPC UA</h3>
+
+<form method="POST" class="row g-3 mb-4">
+  <div class="col-md-6">
+    <label for="endpoint" class="form-label">Endpoint OPC UA</label>
+    <input type="text" class="form-control" id="endpoint" name="endpoint" placeholder="opc.tcp://ip:puerto/..." value="{{ endpoint }}">
+  </div>
+  <div class="col-md-3">
+    <label for="username" class="form-label">Usuario (opcional)</label>
+    <input type="text" class="form-control" id="username" name="username" value="{{ username }}">
+  </div>
+  <div class="col-md-3">
+    <label for="password" class="form-label">Contraseña</label>
+    <input type="password" class="form-control" id="password" name="password">
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Conectar</button>
+    <a href="{{ url_for('opc_route.opc_disconnect') }}" class="btn btn-danger">Desconectar</a>
+  </div>
+</form>
+
+{% if error %}
+<div class="alert alert-danger">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+{% if connected %}
+<div class="alert alert-success">✅ Conexión exitosa</div>
+
+<h5 class="mt-4">Nodos disponibles:</h5>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Nombre</th>
+      <th>NodeId</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for node in opc_data %}
+    <tr>
+      <td>{{ node.name }}</td>
+      <td><code>{{ node.nodeid }}</code></td>
+      <td>
+        <a href="{{ url_for('opc_route.opc_ver', node_id=node.nodeid | urlencode) }}" class="btn btn-sm btn-outline-info">Ver</a>
+        <button class="btn btn-sm btn-outline-secondary" disabled>Monitorear</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

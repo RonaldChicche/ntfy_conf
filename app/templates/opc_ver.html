@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle del Nodo{% endblock %}
+
+{% block content %}
+<h3>Información del Nodo</h3>
+
+{% if error %}
+  <div class="alert alert-danger"><strong>Error:</strong> {{ error }}</div>
+{% else %}
+  <table class="table table-bordered">
+    <tr><th>Nombre</th><td>{{ name }}</td></tr>
+    <tr><th>NodeId</th><td><code>{{ nodeid }}</code></td></tr>
+    <tr><th>Valor</th><td>{{ value }}</td></tr>
+    <tr><th>Tipo de Dato</th><td>{{ data_type }}</td></tr>
+  </table>
+
+  {% if children %}
+  <h5>Subnodos</h5>
+  <table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Nombre</th>
+            <th>NodeId</th>
+            <th>Valor</th>
+            <th>Tipo</th>
+            <th>Timestamp</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for child in children %}
+    <tr>
+        <td>{{ child.name }}</td>
+        <td><code>{{ child.nodeid }}</code></td>
+        <td>{{ child.value if child.has_value else '---' }}</td>
+        <td>{{ child.data_type if child.has_value else '---' }}</td>
+        <td>{{ child.server_timestamp if child.has_value else '---' }}</td>
+        <td>
+        {% if not child.has_value %}
+            <a class="btn btn-sm btn-info" href="{{ url_for('opc_route.opc_ver', node_id=child.nodeid | urlencode) }}">Ver</a>
+        {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <a href="{{ url_for('opc_route.opc_connect') }}" class="btn btn-secondary">← Volver</a>
+{% endif %}
+{% endblock %}

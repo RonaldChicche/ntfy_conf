@@ -4,6 +4,8 @@ from app import db
 class Item(db.Model):
     __tablename__ = 'items'
     id = db.Column(db.Integer, primary_key=True)
+    node_parent = db.Column(db.String(20), nullable=False)
+    node_id = db.Column(db.String(20), nullable=False)
     estado = db.Column(db.String(1), nullable=False, default='0')
     
     topico_id = db.Column(
@@ -18,9 +20,20 @@ class Item(db.Model):
 
     definicion = db.Column(db.Text)
 
+    # orden -> integer, valor unico, no nullo , dedfault id
+    orden = db.Column(db.Integer, unique=True, nullable=False, default=id)
+
     # Relaciones para acceder a los objetos relacionados directamente
     topico_rel = db.relationship('Topico', backref='items', lazy=True)
     tipo_rel = db.relationship('Tipo', backref='items', lazy=True)
+    definicion = db.Column(db.Text)
+
+
+class TagAsociado(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(20))  
+    direccion = db.Column(db.String(20), unique=True, nullable=False)  
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)  # asociación con Item
 
 class Topico(db.Model):
     __tablename__ = 'topicos'

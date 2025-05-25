@@ -1,0 +1,30 @@
+{% for item in items %}
+<div class="modal fade" id="modalTags{{ item.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="/item/{{ item.id }}/tags/update">
+        <div class="modal-header">
+          <h5 class="modal-title">Asociar Tags a Item #{{ item.id }}</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          {% for tag in all_tags %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="tags" value="{{ tag.direccion }}"
+              id="check_{{ item.id }}_{{ tag.id }}"
+              {% if tag.direccion in item.direcciones_asociadas %}checked{% endif %}>
+            <label class="form-check-label" for="check_{{ item.id }}_{{ tag.id }}">
+              {{ tag.nombre }} — {{ tag.direccion }}
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Guardar</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}

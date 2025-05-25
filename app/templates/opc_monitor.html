@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% block title %}Monitor en Tiempo Real{% endblock %}
+
+{% block content %}
+<h3>🖥️ Monitoreo en Tiempo Real</h3>
+
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="POST" class="row g-3 mb-4">
+  <div class="col-md-6">
+    <label for="selected_group" class="form-label">Grupo principal</label>
+    <select name="selected_group" id="selected_group" class="form-select">
+      <option value="">-- Selecciona un grupo --</option>
+      {% for nodo in nodos_raiz %}
+        <option value="{{ nodo.nodeid }}" {% if nodo.nodeid == selected_group %}selected{% endif %}>{{ nodo.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-3 align-self-end">
+    <button type="submit" class="btn btn-primary">🟢 Iniciar Monitoreo</button>
+  </div>
+</form>
+
+{% if subnodos %}
+<h5 class="mt-4">📡 Subnodos monitoreados:</h5>
+<table class="table table-striped" id="monitor-table">
+  <thead>
+    <tr>
+      <th>Nombre</th>
+      <th>NodeId</th>
+      <th>Valor</th>
+      <th>Timestamp</th>
+      <th>Alarmas</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in subnodos %}
+    <tr data-nodeid="{{ s.nodeid }}">
+      <td>{{ s.name }}</td>
+      <td><code>{{ s.nodeid }}</code></td>
+      <td class="value">{{ s.value }}</td>
+      <td class="timestamp">{{ s.timestamp }}</td>
+      <td><button type="button" class="btn btn-sm btn-outline-danger agregar-alarma" data-nodeid="{{ s.nodeid }}" data-type="{{ s.data_type }}">Agregar</button></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h5 class="mt-4">🔔 Nodos seleccionados para alarmas:</h5>
+<table class="table table-bordered" id="tabla-alarmas">
+  <thead>
+    <tr>
+      <th>NodeId</th>
+      <th>Tipo de Dato</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<button class="btn btn-success" id="activar-alarmas">✅ Activar monitoreo de alarmas</button>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const groupNodeId = "{{ selected_group }}";
+  console.log("🧪 Grupo seleccionado:", groupNodeId);
+
+  async function actualizarTabla() {
+    if (!groupNodeId || groupNodeId === "None") {
+      console.log("⚠️ No hay grupo seleccionado.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/opc/monitor/json?group=" + encodeURIComponent(groupNodeId));
+      const data = await res.json();
+
+      if (data.error) {
+        console.warn("❌ Error recibido del servidor:", data.error);
+        return;
+      }
+
+      data.forEach(entry => {
+        const row = document.querySelector(`tr[data-nodeid="${entry.nodeid}"]`);
+        if (row) {
+          row.querySelector('.value').textContent = entry.value;
+          row.querySelector('.timestamp').textContent = entry.timestamp;
+        }
+      });
+    } catch (err) {
+      console.error("❌ Error en la petición Ajax:", err);
+    }
+  }
+
+  setInterval(actualizarTabla, 1000);
+
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.classList.contains('agregar-alarma')) {
+      const nodeId = e.target.getAttribute('data-nodeid');
+      const type = e.target.getAttribute('data-type');
+
+      // Evita duplicados
+      if (document.querySelector(`#tabla-alarmas tr[data-nodeid='${nodeId}']`)) return;
+
+      const row = document.createElement('tr');
+      row.setAttribute('data-nodeid', nodeId);
+      row.innerHTML = `
+        <td><code>${nodeId}</code></td>
+        <td>${type}</td>
+        <td><button class="btn btn-sm btn-outline-danger eliminar-alarma">Eliminar</button></td>
+      `;
+      document.querySelector('#tabla-alarmas tbody').appendChild(row);
+    }
+
+    if (e.target && e.target.classList.contains('eliminar-alarma')) {
+      e.target.closest('tr').remove();
+    }
+  });
+
+  document.querySelector('#activar-alarmas')?.addEventListener('click', async function () {
+    const nodos = [...document.querySelectorAll('#tabla-alarmas tr')].map(tr => {
+      return {
+        nodeid: tr.getAttribute('data-nodeid'),
+        type: tr.children[1].textContent
+      };
+    });
+
+    try {
+      const res = await fetch('/opc/alarms/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodos })
+      });
+      const result = await res.json();
+      if (result.status === 'ok') {
+        alert("✅ Monitoreo de alarmas activado");
+      } else {
+        console.warn("❌ Error activando alarmas:", result.error);
+        alert("⚠️ Error al activar alarmas");
+      }
+    } catch (err) {
+      console.error("❌ Falló petición de alarma:", err);
+    }
+  });
+</script>
+{% endblock %}

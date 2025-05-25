@@ -25,7 +25,12 @@
     <tbody>
         {% for item in items %}
         <tr>
-            <td>{{ item.id }}</td>
+            <td>
+                <button class="btn btn-sm btn-link toggle-tags" data-bs-toggle="collapse" data-bs-target="#tags-{{ item.id }}">
+                ▶
+                </button>
+                {{ item.id }}
+            </td>
             <td>{{ item.estado }}</td>
             <!-- <td>{{ item.topico_rel.topico }}</td> -->
               <!-- Tópico -->
@@ -56,6 +61,12 @@
                 </form>
             </td>
             <td>{{ item.definicion }}</td>
+            <td>
+                <!-- Botón para abrir modal de tags -->
+                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalTags{{ item.id }}">
+                Asociar Tags
+                </button>
+            </td>
             <td class="d-flex flex-wrap gap-1">
                 <!-- Eliminar -->
                 <a href="/delete_item/{{ item.id }}" class="btn btn-danger btn-sm">Eliminar</a>
@@ -80,6 +91,22 @@
                 </button>
             </td>
         </tr>
+        <tr class="collapse" id="tags-{{ item.id }}">
+            <td colspan="6">
+                <ul class="list-group" id="tag-list-{{ item.id }}">
+                {% for tag in item.tags_asociados %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>
+                    <strong>{{ tag.nombre }}</strong> — {{ tag.direccion }}
+                    </span>
+                    <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalEditTag{{ tag.id }}">
+                    Editar
+                    </button>
+                </li>
+                {% endfor %}
+                </ul>
+            </td>
+        </tr>
         {% else %}
         <tr>
             <td colspan="6" class="text-muted text-center">No hay ítems</td>
@@ -90,4 +117,74 @@
 
 {% include 'modal_update.html' %}
 
+{% include 'modal_tags.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+  async function actualizarItems() {
+    try {
+      const response = await fetch("/items/json");  // Nueva ruta que debes crear
+      const data = await response.json();
+
+      data.forEach(item => {
+        const rows = document.querySelectorAll("table tbody tr");
+        rows.forEach(row => {
+          const idCell = row.querySelector("td:first-child");
+          const estadoCell = row.querySelector("td:nth-child(2)");
+          if (idCell && idCell.textContent == item.id.toString()) {
+            if (estadoCell.textContent !== item.estado) {
+              estadoCell.textContent = item.estado;
+              estadoCell.classList.add("bg-success", "text-white");
+              setTimeout(() => estadoCell.classList.remove("bg-success", "text-white"), 1000);
+            }
+          }
+        });
+      });
+    } catch (error) {
+      console.error("❌ Error al hacer polling:", error);
+    }
+  }
+
+  setInterval(actualizarItems, 1000);  // Llama cada segundo
+</script>
+
+<!-- <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+<script>
+  
+    console.log("index script function ...")
+
+    // Socket global único
+    if (!window.socket) {
+        window.socket = io();
+
+        window.socket.on('connect', () => {
+            console.log("🟢 Socket conectado desde base.html");
+        });
+
+        window.socket.on('item_update', data => {
+            console.log("📡 Cambio recibido:", data);
+            const rows = document.querySelectorAll("table tbody tr");
+            rows.forEach(row => {
+                const idCell = row.querySelector("td:first-child");
+                const estadoCell = row.querySelector("td:nth-child(2)");
+                if (idCell && idCell.textContent == data.node_id) {
+                    estadoCell.textContent = data.estado;
+                    estadoCell.classList.add("bg-success", "text-white");
+                    setTimeout(() => estadoCell.classList.remove("bg-success", "text-white"), 1000);
+                }
+            });
+        });
+    }
+
+
+    window.socket.onAny((event, ...args) => {
+        console.log("📦 Evento recibido base:", event, args);
+    });
+
+    
+</script> -->
 {% endblock %}

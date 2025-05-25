@@ -1,11 +1,35 @@
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify
-from app.models import db, Item, Topico, Tipo, Prioridad
+from flask import Blueprint, render_template, request, redirect, jsonify, url_for, current_app
+from app.models import db, Item, Topico, Tipo, Prioridad, TagAsociado
 from app.config import Config
 
-import requests
 import json
+import requests
 
 main = Blueprint('main', __name__)
+
+
+def get_tags():
+    # Obtener el nodo raíz desde la configuración
+    tags_node = Config.TAGS_NODE or ""
+    print ("tags_node", tags_node)
+    if not tags_node:
+        return []
+
+    # Llamar a la API local para obtener los nodos hijos
+    try:
+        base_url = current_app.config.get("BASE_URL", "http://localhost:5000")  # Cambia puerto si necesario
+        print("base_url", base_url)
+        response = requests.get(f"{base_url}/opc/nodes/children?nodeid={tags_node}")
+        if response.status_code == 200:
+            data = response.json()
+            print("data", data)
+            return data.get("children", [])
+        else:
+            current_app.logger.error(f"Error al obtener tags OPC: {response.status_code} {response.text}")
+            return []
+    except Exception as e:
+        current_app.logger.error(f"Excepción en get_tags(): {e}")
+        return []
 
 # Items CRUD y manejo
 
@@ -15,7 +39,8 @@ def index():
     topicos = Topico.query.all()
     tipos = Tipo.query.all()
     prioridades = Prioridad.query.all()
-    return render_template('index.html', items=items, topicos=topicos, tipos=tipos, prioridades=prioridades)
+    tags = get_tags()
+    return render_template('index.html', items=items, topicos=topicos, tipos=tipos, prioridades=prioridades, tags=tags)
 
 @main.route('/add', methods=['POST'])
 def add_item():
@@ -121,71 +146,28 @@ def send_definicion():
 
     return redirect('/')
 
+@main.route('/items/json')
+def items_json():
+    items = Item.query.all()
+    return jsonify([{"id": item.id, "estado": item.estado} for item in items])
 
-# Topicos CRUD --------------------------------------------------
-@main.route('/topicos')
-def ver_topicos():
-    topicos = Topico.query.all()
-    prioridades = Prioridad.query.all()
-    return render_template('topicos.html', topicos=topicos, prioridades=prioridades)
+@main.route("/item/<int:item_id>/tags/update", methods=["POST"])
+def update_tags(item_id):
+    item = Item.query.get_or_404(item_id)
+    nuevas = set(request.form.getlist("tags"))
 
-@main.route("/topicos/add", methods=["POST"])
-def agregar_topico():
-    nombre = request.form["nombre"]
-    descripcion = request.form.get("descripcion", "")
-    new_topico = Topico(topico=nombre, descripcion=descripcion)
-    db.session.add(new_topico)
-    db.session.commit()
-    return redirect("/topicos")
+    # Eliminar los que ya no están
+    for t in item.tags_asociados[:]:
+        if t.direccion not in nuevas:
+            db.session.delete(t)
 
-@main.route("/topicos/delete/<int:id>")
-def eliminar_topico(id):
-    topico_to_delete = Topico.query.get(id)
-    db.session.delete(topico_to_delete)
-    db.session.commit()
-    return redirect("/topicos")
-
-# Tipos CRUD -----------------------------------------------------
-@main.route('/tipos')
-def ver_tipos():
-    tipos = Tipo.query.all()
-    prioridades = Prioridad.query.all()
-    return render_template('tipos.html', tipos=tipos, prioridades=prioridades)
-
-@main.route("/tipos/add", methods=["POST"])
-def agregar_tipo():
-    nombre = request.form["nombre"]
-    descripcion = request.form.get("descripcion", "")
-    prioridad_id = request.form.get("prioridad_id", type=int)
-
-    new_tipo = Tipo(tipo=nombre, descripcion=descripcion, prioridad_id=prioridad_id)
-    db.session.add(new_tipo)
-    db.session.commit()
-    return redirect("/tipos")
-
-@main.route("/tipos/delete/<int:id>")
-def eliminar_tipo(id):
-    tipo_to_delete = Tipo.query.get(id)
-    db.session.delete(tipo_to_delete)
-    db.session.commit()
-    return redirect("/tipos")
-
-@main.route("/tipos/update/<int:id>", methods=["POST"])
-def actualizar_tipo(id):
-    tipo = Tipo.query.get_or_404(id)
-
-    tipo.tipo = request.form.get("nombre", tipo.tipo)
-    tipo.descripcion = request.form.get("descripcion", tipo.descripcion)
-    tipo.prioridad_id = request.form.get("prioridad_id", type=int)
+    # Agregar nuevos
+    existentes = {t.direccion for t in item.tags_asociados}
+    for direccion in nuevas - existentes:
+        nuevo_tag = TagAsociado(nombre="Nuevo", direccion=direccion, item_id=item.id)
+        db.session.add(nuevo_tag)
 
     db.session.commit()
-    return redirect("/tipos")
+    return redirect(url_for("main.index"))
 
-@main.route("/tipos/update_prioridad/<int:id>", methods=["POST"])
-def actualizar_prioridad_tipo(id):
-    tipo = Tipo.query.get_or_404(id)
-    nueva_prioridad = request.form.get("prioridad_id", type=int)
 
-    tipo.prioridad_id = nueva_prioridad
-    db.session.commit()
-    return redirect("/tipos")
