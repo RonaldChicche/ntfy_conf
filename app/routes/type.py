@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect
-from app.models import db, Tipo, Prioridad
+from app.database.models import db, Tipo, Prioridad
 
 
 type_route = Blueprint('type_route', __name__)

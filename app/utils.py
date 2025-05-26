@@ -2,7 +2,7 @@
 
 def insertar_prioridades():
     from app import db 
-    from app.models import Prioridad
+    from app.database.models import Prioridad
 
     if Prioridad.query.count() == 0:
         print("⚙️ Insertando prioridades iniciales...")

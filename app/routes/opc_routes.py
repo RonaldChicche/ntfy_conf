@@ -1,114 +1,51 @@
 from flask import Blueprint, render_template, request, redirect, jsonify, current_app, session, url_for
-from app.models import db, Item
-from app.config import Config
-from app.opc_handler import OpcUaClient, WebAlarmHandler, OPC_CLIENTS
+from app.database.models import db, Item
+from app.config import get_config_value
+from app.opc_handler import OpcUaClient, WebAlarmHandler
 from opcua import ua
-from flask_socketio import emit
+from urllib.parse import unquote
 
 import json
 import os
 
 opc_route = Blueprint('opc_route', __name__)
+opc_client = OpcUaClient(get_config_value('OPC_ENDPOINT'), get_config_value('OPC_USERNAME'), get_config_value('OPC_PASSWORD'))
 
 
-def int_to_bits(value, bits=16):
-    return [(value >> i) & 1 for i in range(bits)]
+@opc_route.route('/opc/connect', methods=['POST'])
+def opc_connect():
+    # recibe credenciales
+    endpoint = request.form.get('endpoint')
+    username = request.form.get('username')
+    password = request.form.get('password')
 
-def get_opc_client(user_key=None):
-    # if 'opc_endpoint' not in session:
-    #     return None
-    # if 'opc_endpoint' in session:
-    #     return current_app.config["OPC_CLIENT"]
+    # compara credenciales
+    if endpoint != opc_client.endpoint or username != opc_client.username or password != opc_client.password:
+        opc_client.change_credentials(username, password)
+        opc_client.change_endpoint(endpoint)
+        return redirect(url_for('opc_route.opc_main'))
 
-    if user_key is None and 'opc_endpoint' not in session:
-        user_key = session.get("user_id", request.remote_addr)
-        return OPC_CLIENTS[user_key]
-
-    if current_app.config.get("OPC_CLIENT") is None:
-        client = OpcUaClient(
-            session['opc_endpoint'],
-            session.get('opc_username'),
-            session.get('opc_password')
-        )
-        client.connect()
-        if user_key:
-            OPC_CLIENTS[user_key] = client
-        current_app.config["OPC_CLIENT"] = client
-    
-    return current_app.config["OPC_CLIENT"]
-
-
-def guardar_historial(endpoint):
-    historial = cargar_historial()
-    if endpoint in historial:
-        historial.remove(endpoint)
-    historial.insert(0, endpoint)
-    historial = historial[:2]  # Solo guardar las 2 más recientes
-    with open(Config.HISTORY_FILE, 'w') as f:
-        json.dump(historial, f)
-
-def cargar_historial():
-    if os.path.exists(Config.HISTORY_FILE):
-        try:
-            with open(Config.HISTORY_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return []
-    return []
+    # inicia conexion
+    opc_client.connect()
+    return redirect(url_for('opc_route.opc_main'))
 
 @opc_route.route('/opc/disconnect')
 def opc_disconnect():
-    client = get_opc_client()
-    if client:
-        client.disconnect()
-        current_app.config["OPC_CLIENT"] = None
-    session.clear()
-    return redirect(url_for('opc_route.opc_connect'))
+    # cierra conexion
+    opc_client.disconnect()
+    return redirect(url_for('opc_route.opc_main'))
 
-@opc_route.route('/opc', methods=['GET', 'POST'])
-def opc_connect():
+@opc_route.route('/opc')
+def opc_main():
     opc_data = []
     error = None
     connected = False
 
-    if request.method == 'POST':
-        endpoint = request.form.get('endpoint')
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        user_key = request.remote_addr
-
-        current_endpoint = session.get('opc_endpoint')
-        current_username = session.get('opc_username')
-        current_user_key = session.get('user_id')
-
-        if endpoint != current_endpoint or username != current_username or user_key != current_user_key:
-            # Guardar nueva configuración y forzar reconexión
-            session['opc_endpoint'] = endpoint
-            session['opc_username'] = username
-            session['opc_password'] = password
-            session["user_id"] = request.remote_addr
-            
-            guardar_historial(endpoint)
-
-            client = current_app.config.get("OPC_CLIENT")
-            if client:
-                client.disconnect()
-                current_app.config["OPC_CLIENT"] = None
-
-        try:
-            client = get_opc_client(user_key=user_key)
-            connected = True
-        except Exception as e:
-            error = str(e)
-
     # Solo lee nodos si ya está conectado
-    client = current_app.config.get("OPC_CLIENT")
-    if client:
+    if opc_client.is_connected:
         try:
-            objects = client.client.get_objects_node()
+            objects = opc_client.client.get_objects_node()
             for obj in objects.get_children():
-                print(obj)
                 opc_data.append({
                     'name': obj.get_display_name().Text,
                     'nodeid': obj.nodeid.to_string()
@@ -117,58 +54,41 @@ def opc_connect():
         except Exception as e:
             error = str(e)
 
-    return render_template('opc.html', opc_data=opc_data, error=error, connected=connected, endpoint=session.get('opc_endpoint', ''), username=session.get('opc_username', ''))
+    return render_template( 'opc.html', 
+                           opc_data=opc_data, error=error, 
+                           connected=connected, 
+                           endpoint=opc_client.endpoint, 
+                           username=opc_client.username)
 
 
 @opc_route.route('/opc/ver/<path:node_id>')
 def opc_ver(node_id):
-    from urllib.parse import unquote
     node_id = unquote(node_id)
-    client = get_opc_client()
-    if not client:
-        return redirect(url_for('opc_route.opc_connect'))
+    if not opc_client.is_connected:
+        return redirect(url_for('opc_route.opc_main'))
 
     try:
-        node = client.client.get_node(node_id)
+        node = opc_client.client.get_node(node_id)
         name = node.get_display_name().Text
-        try:
-            data_type = str(node.get_data_type_as_variant_type())
-        except:
-            data_type = "No disponible"
-
-        try:
-            value = node.get_value()
-            children = []
-        except:
-            value = "No legible"
-            try:
-                children = []
-                for child in node.get_children():
-                    try:
-                        val = child.get_value()
-                        dtype = str(child.get_data_type_as_variant_type())
-                        try:
-                            ts = child.read_value().ServerTimestamp
-                        except:
-                            ts = None
-                        children.append({
-                            'name': child.get_display_name().Text,
-                            'nodeid': child.nodeid.to_string(),
-                            'value': val,
-                            'data_type': dtype,
-                            'server_timestamp': ts,
-                            'has_value': True
-                        })
-                    except:
-                        children.append({
-                            'name': child.get_display_name().Text,
-                            'nodeid': child.nodeid.to_string(),
-                            'has_value': False
-                        })
-            except:
-                children = []
-
-        return render_template(
+        data_type = str(node.get_data_type_as_variant_type())
+        value = node.get_value()
+        children = []
+        for child in node.get_children():
+            val = child.get_value()
+            dtype = str(child.get_data_type_as_variant_type())
+            ts = child.read_value().ServerTimestamp
+            children.append({
+                'name': child.get_display_name().Text,
+                'nodeid': child.nodeid.to_string(),
+                'value': val,
+                'data_type': dtype,
+                'server_timestamp': ts,
+                'has_value': True
+            })
+    except Exception as e:
+        return render_template('opc_ver.html', error=str(e))
+    
+    return render_template(
             'opc_ver.html',
             name=name,
             nodeid=node_id,
@@ -177,14 +97,9 @@ def opc_ver(node_id):
             children=children
         )
 
-    except Exception as e:
-        return render_template('opc_ver.html', error=str(e))
-    
-
 @opc_route.route('/opc/monitor', methods=['GET', 'POST'])
 def monitorear():
-    client = get_opc_client()
-    if not client:
+    if not opc_client.is_connected:
         return render_template('opc_monitor.html', error="No hay conexión activa con el servidor OPC UA")
 
     nodos_raiz = []
@@ -193,7 +108,7 @@ def monitorear():
     error = None
 
     try:
-        objects_node = client.client.get_objects_node()
+        objects_node = opc_client.client.get_objects_node()
         for child in objects_node.get_children():
             nodos_raiz.append({
                 'name': child.get_display_name().Text,
@@ -201,7 +116,7 @@ def monitorear():
             })
 
         if selected_group:
-            parent_node = client.client.get_node(selected_group)
+            parent_node = opc_client.client.get_node(selected_group)
             print("PArent node", parent_node)
             for child in parent_node.get_children():
                 try:
@@ -227,9 +142,7 @@ def monitorear():
 
 @opc_route.route('/opc/monitor/json')
 def monitoreo_json():
-    from urllib.parse import unquote
-    client = get_opc_client()
-    if not client:
+    if not opc_client.is_connected:
         return jsonify({'error': 'No conectado'}), 400
 
     group = request.args.get('group')
@@ -237,7 +150,7 @@ def monitoreo_json():
         return jsonify({'error': 'Falta group'}), 400
 
     try:
-        parent_node = client.client.get_node(unquote(group))
+        parent_node = opc_client.client.get_node(unquote(group))
         data = []
         for child in parent_node.get_children():
             try:
@@ -255,8 +168,7 @@ def monitoreo_json():
     
 @opc_route.route('/opc/alarms/config', methods=['POST'])
 def configurar_alarmas():
-    client = get_opc_client()
-    if not client:
+    if not opc_client.is_connected:
         return jsonify({'error': 'No hay conexión con el servidor OPC'}), 400
 
     data = request.get_json()
@@ -271,17 +183,17 @@ def configurar_alarmas():
 
     # Obtener los nodos ya suscritos
     suscritos = set()
-    if client.subscription:
-        for h in client.sub_handles:
-            node_id = client.subscription.get_node_id(h)
+    if opc_client.subscription:
+        for h in opc_client.sub_handles:
+            node_id = opc_client.subscription.get_node_id(h)
             suscritos.add(node_id)
     
     # Eliminar los que ya no estan en la seleccion
-    for h in client.sub_handles[:]:
-        node_id = client.subscription.get_node_id(h)
+    for h in opc_client.sub_handles[:]:
+        node_id = opc_client.subscription.get_node_id(h)
         if node_id not in suscritos:
-            client.subscription.unsubscribe(h)
-            client.sub_handles.remove(h)
+            opc_client.subscription.unsubscribe(h)
+            opc_client.sub_handles.remove(h)
 
     for orden, nodo in enumerate(seleccion):
         nodeid = nodo.get("nodeid")
@@ -294,7 +206,7 @@ def configurar_alarmas():
             continue
 
         try:
-            opc_node = client.client.get_node(nodeid)
+            opc_node = opc_client.client.get_node(nodeid)
             val = opc_node.get_value()
             dtype = opc_node.get_data_type_as_variant_type()
             print("Val:", val, "Dtype:", dtype, "opc_node:", opc_node)
@@ -303,22 +215,10 @@ def configurar_alarmas():
                 errores.append({"nodeid": nodeid, "error": f"Tipo no compatible: {dtype.name}"})
                 continue
 
-            bits = int_to_bits(val, bits=32 if '32' in dtype.name else 16)
-            handle = client.subscription.subscribe_data_change(opc_node)
-
-            print("Handle:", handle, "Bits:", bits)
-            client.sub_handles.append(handle)
+            #bits = int_to_bits(val, bits=32 if '32' in dtype.name else 16)
+            handle = opc_client.subscription.subscribe_data_change(opc_node)
+            opc_client.sub_handles.append(handle)
             nodos_validos.append(nodeid)
-
-            # Guardar un Item por cada bit usando un enumerateinvertido:
-            for i, bit in enumerate(bits):
-                bit_node_id = f"{nodeid}[{i}]"
-                nuevo = Item(
-                    node_id=bit_node_id,
-                    node_parent=nodeid,
-                    estado=str(bit)
-                )
-                db.session.add(nuevo)
 
         except Exception as e:
             errores.append({"nodeid": nodeid, "error": str(e)})
@@ -333,22 +233,18 @@ def nodos_children():
     print("🔧 Entró al endpoint de children")
 
     try:
-        from urllib.parse import unquote
-
-        client = get_opc_client()
-        print("🔌 Cliente OPC:", client)
         nodeid = request.args.get('nodeid')
         print("🔍 Buscando children de:", nodeid)
 
         #print("🔧 Buscando cleinte:", session['opc_endpoint'])
 
-        if not client:
+        if not opc_client.is_connected:
             return jsonify({'error': 'Cliente no conectado'}), 400
 
         if not nodeid:
             return jsonify({'error': 'Parámetro nodeid faltante'}), 400
 
-        node = client.client.get_node(unquote(nodeid))
+        node = opc_client.client.get_node(unquote(nodeid))
         children = []
         for child in node.get_children():
             try:

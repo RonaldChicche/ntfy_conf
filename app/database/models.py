@@ -24,10 +24,10 @@ class Item(db.Model):
     orden = db.Column(db.Integer, unique=True, nullable=False, default=id)
 
     # Relaciones para acceder a los objetos relacionados directamente
+    tags_asociados = db.relationship('TagAsociado', backref='item', lazy=True)
     topico_rel = db.relationship('Topico', backref='items', lazy=True)
     tipo_rel = db.relationship('Tipo', backref='items', lazy=True)
     definicion = db.Column(db.Text)
-
 
 class TagAsociado(db.Model):
     id = db.Column(db.Integer, primary_key=True)

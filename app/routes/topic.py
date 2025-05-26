@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect
-from app.models import db, Topico, Prioridad
+from app.database.models import db, Topico, Prioridad
 
 
 topic = Blueprint('topic', __name__)

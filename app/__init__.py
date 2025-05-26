@@ -2,23 +2,22 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 #from flask_socketio import SocketIO
 from flask_migrate import Migrate
-from dotenv import load_dotenv
+from app.config import get_env
 from app.utils import insertar_prioridades
 
 import os
 
 
 db = SQLAlchemy()
-#socketio = SocketIO(cors_allowed_origins="*")
 migrate = Migrate()
 
 
 def create_app():
-    load_dotenv()  # Carga variables del .env
 
     app = Flask(__name__)
-    app.secret_key = "clave_segura"  #os.getenv('SECRET_KEY')
-    app.config.from_object('app.config.Config')
+    app.secret_key = get_env('SECRET_KEY')
+    app.config["SQLALCHEMY_DATABASE_URI"] = get_env("DATABASE_URL", "sqlite:///data.db")
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
     migrate.init_app(app, db)

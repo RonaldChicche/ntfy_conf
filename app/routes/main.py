@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, jsonify, url_for, current_app
-from app.models import db, Item, Topico, Tipo, Prioridad, TagAsociado
-from app.config import Config
+from app.database.models import db, Item, Topico, Tipo, Prioridad, TagAsociado
+from app.config import get_config_value
 
 import json
 import requests
@@ -10,7 +10,7 @@ main = Blueprint('main', __name__)
 
 def get_tags():
     # Obtener el nodo raíz desde la configuración
-    tags_node = Config.TAGS_NODE or ""
+    tags_node = get_config_value("TAGS_NODE")
     print ("tags_node", tags_node)
     if not tags_node:
         return []
@@ -137,7 +137,7 @@ def send_definicion():
     # 🚫 Comentado para pruebas
     try:
         import requests
-        response = requests.post(Config.NTFY_URL, data=json.dumps(payload), headers={"Content-Type": "application/json"})
+        response = requests.post(get_config_value("NOTIFY_URL"), data=json.dumps(payload), headers={"Content-Type": "application/json"})
         response.raise_for_status()
         print("✅ Mensaje enviado a ntfy")
     except Exception as e:
