@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.sql import func
 from app.database.models import Item, TagAsociado, Topico, Tipo, Prioridad
 
@@ -7,13 +7,13 @@ def get_items(db: Session, skip: int = 0):
     # join en cadena: Item → Topico, Tipo → Prioridad
     items = (
         db.query(Item)
-        .join(Item.topico_rel)
-        .join(Item.tipo_rel)
-        .join(Tipo.prioridad)
+        .outerjoin(Item.topico_rel)
+        .outerjoin(Item.tipo_rel)
+        .outerjoin(Tipo.prioridad)
         .options(
-            db.joinedload(Item.topico_rel),
-            db.joinedload(Item.tipo_rel).joinedload(Tipo.prioridad),
-            db.joinedload(Item.tags_asociados)
+            joinedload(Item.topico_rel),
+            joinedload(Item.tipo_rel).joinedload(Tipo.prioridad),
+            joinedload(Item.tags_asociados)
         )
         .offset(skip)
         .all()
@@ -21,21 +21,31 @@ def get_items(db: Session, skip: int = 0):
     return items
 
 def get_item(db: Session, item_id: int):
-    # join en cadena: Item → Topico, Tipo → Prioridad
-    item = (
+    return (
         db.query(Item)
-        .filter(Item.id == item_id)
-        .join(Item.topico_rel)
-        .join(Item.tipo_rel)
-        .join(Tipo.prioridad)
+        .outerjoin(Item.topico_rel)
+        .outerjoin(Item.tipo_rel)
+        .outerjoin(Tipo.prioridad)
         .options(
-            db.joinedload(Item.topico_rel),
-            db.joinedload(Item.tipo_rel).joinedload(Tipo.prioridad),
-            db.joinedload(Item.tags_asociados)
+            joinedload(Item.topico_rel),
+            joinedload(Item.tipo_rel).joinedload(Tipo.prioridad),
+            joinedload(Item.tags_asociados)
         )
+        .filter(Item.id == item_id)
         .first()
     )
-    return item
+
+def get_item_by_order_and_node_id(db: Session, orden: int, node_id: str):
+    return (
+        db.query(Item)
+        .filter(Item.orden == orden)
+        .filter(Item.node_id == node_id)
+        .first()
+    )
+
+# get list of node_id from items only
+def get_items_node_id(db: Session, skip: int = 0):
+    return db.query(func.distinct(Item.node_id)).offset(skip).all()
 
 def add_item(db: Session, item: Item):
     db.add(item)
@@ -43,9 +53,29 @@ def add_item(db: Session, item: Item):
     db.refresh(item)
     return item
 
-# delete all items by node_id
 def delete_items_by_node_id(db: Session, node_id: str):
+    count = db.query(Item).filter(Item.node_id == node_id).count()
     db.query(Item).filter(Item.node_id == node_id).delete()
+    db.commit()
+    return count
+
+# CRUD TagAsociados -----------------------------------------------------
+def get_tag_asociados(db: Session, skip: int = 0):
+    return db.query(TagAsociado).offset(skip).all()
+
+def add_tag_asociado(db: Session, tag_asociado: TagAsociado):
+    db.add(tag_asociado)
+    db.commit()
+    db.refresh(tag_asociado)
+    return tag_asociado
+
+def delete_tag_asociado(db: Session, tag_asociado_id: int):
+    tag_asociado = db.query(TagAsociado).filter(TagAsociado.id == tag_asociado_id).first()
+    db.delete(tag_asociado)
+    db.commit()
+
+def delete_tag_asociados_by_item_id(db: Session, item_id: int):
+    db.query(TagAsociado).filter(TagAsociado.item_id == item_id).delete()
     db.commit()
 
 # CRUD Topicos -----------------------------------------------------

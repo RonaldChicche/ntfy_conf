@@ -17,19 +17,21 @@ def get_env(var_name, default=None):
 
 def load_config_json():
     """Carga config.json completo"""
-    with _config_lock:
-        with open(_CONFIG_FILE, "r") as f:
-            return json.load(f)
+    with open(_CONFIG_FILE, "r") as f:
+        return json.load(f)
 
 def get_config_value(key, default=None):
     """Accede a un valor específico del config.json"""
-    config = load_config_json()
-    return config.get(key, default)
+    with _config_lock:
+        config = load_config_json()
+        return config.get(key, default)
 
 def set_config_value(key, value):
     """Actualiza un valor en config.json"""
+    print("🔌 Actualizando config.json...")
     with _config_lock:
         config = load_config_json()
         config[key] = value
+        print(f"✅ Actualizado {key} en config.json: {value}")
         with open(_CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=4)

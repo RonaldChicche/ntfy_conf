@@ -1,4 +1,5 @@
 from opcua import Client
+from opcua import ua
 
 # URL del servidor desde la interfaz que mostraste
 url = "opc.tcp://ronald_desk:62640/IntegrationObjects/ServerSimulator"
@@ -27,6 +28,11 @@ try:
     realtime = client.get_node("ns=2;s=Realtimedata")
     for var in realtime.get_children():
         print(var, "=>", var.get_display_name().Text, var.get_value())
+    
+    # get attributes
+    print(dir(realtime))
+    node_class = realtime.get_node_class()
+    print(node_class)
 
 finally:
     client.disconnect()

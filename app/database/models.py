@@ -21,7 +21,7 @@ class Item(db.Model):
     definicion = db.Column(db.Text)
 
     # orden -> integer, valor unico, no nullo , dedfault id
-    orden = db.Column(db.Integer, unique=True, nullable=False, default=id)
+    orden = db.Column(db.Integer, nullable=False, default=id)
 
     # Relaciones para acceder a los objetos relacionados directamente
     tags_asociados = db.relationship('TagAsociado', backref='item', lazy=True)

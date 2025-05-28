@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, jsonify, url_for, current_app
 from app.database.models import db, Item, Topico, Tipo, Prioridad, TagAsociado
+from app.database import crud
 from app.config import get_config_value
 
 import json
@@ -35,12 +36,14 @@ def get_tags():
 
 @main.route('/')
 def index():
-    items = Item.query.all()
-    topicos = Topico.query.all()
-    tipos = Tipo.query.all()
-    prioridades = Prioridad.query.all()
-    tags = get_tags()
-    return render_template('index.html', items=items, topicos=topicos, tipos=tipos, prioridades=prioridades, tags=tags)
+    items = crud.get_items(db.session)
+    topicos = crud.get_topicos(db.session)
+    tipos = crud.get_tipos(db.session)
+    prioridades = crud.get_prioridades(db.session)
+    tags = crud.get_tag_asociados(db.session)
+    all_tags = get_tags()
+    print("---->>>>>> TAGS :", all_tags)
+    return render_template('index.html', items=items, topicos=topicos, tipos=tipos, prioridades=prioridades, tags=tags, all_tags=all_tags)
 
 @main.route('/add', methods=['POST'])
 def add_item():
@@ -104,57 +107,19 @@ def change_item(item_id):
     else:
         return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
 
-@main.route('/send', methods=['POST'])
-def send_definicion():
-    item_id = request.form.get('item_id')
 
-    if not item_id:
-        print("❌ No se proporcionó item_id")
-        return jsonify({'status': 'error', 'message': 'ID no proporcionado'}), 400
-
-    item = Item.query.get(item_id)
-    if not item:
-        print(f"❌ Item con ID {item_id} no encontrado")
-        return jsonify({'status': 'error', 'message': 'Item no encontrado'}), 404
-
-    topico = item.topico_rel.descripcion if item.topico_rel else 'mantenimiento'
-    tipo = item.tipo_rel
-    titulo = tipo.descripcion if tipo else "Notificación"
-    prioridad = tipo.prioridad_id if tipo and tipo.prioridad_id else 3
-
-    payload = {
-        "topic": topico,
-        "message": item.definicion,
-        "title": titulo,
-        "priority": prioridad
-    }
-
-    # 🔍 Para pruebas: muestra lo que se enviaría
-    # 🧪 Imprimir el JSON antes de enviar
-    print("📤 JSON A ENVIAR:")
-    print(json.dumps(payload, indent=2))
-
-    # 🚫 Comentado para pruebas
-    try:
-        import requests
-        response = requests.post(get_config_value("NOTIFY_URL"), data=json.dumps(payload), headers={"Content-Type": "application/json"})
-        response.raise_for_status()
-        print("✅ Mensaje enviado a ntfy")
-    except Exception as e:
-        print(f"❌ Error al enviar notificación: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-    return redirect('/')
 
 @main.route('/items/json')
 def items_json():
-    items = Item.query.all()
+    items = crud.get_items(db.session)
+    #print("items", items)
     return jsonify([{"id": item.id, "estado": item.estado} for item in items])
 
 @main.route("/item/<int:item_id>/tags/update", methods=["POST"])
 def update_tags(item_id):
     item = Item.query.get_or_404(item_id)
     nuevas = set(request.form.getlist("tags"))
+    print(f"🔍 Nuevas tags: {nuevas}")
 
     # Eliminar los que ya no están
     for t in item.tags_asociados[:]:
@@ -168,6 +133,15 @@ def update_tags(item_id):
         db.session.add(nuevo_tag)
 
     db.session.commit()
+    return redirect(url_for("main.index"))
+
+@main.route("/tags/<int:tag_id>/update", methods=["POST"])
+def update_tag_nombre(tag_id):
+    tag = TagAsociado.query.get_or_404(tag_id)
+    nuevo_nombre = request.form.get("nombre")
+    if nuevo_nombre:
+        tag.nombre = nuevo_nombre
+        db.session.commit()
     return redirect(url_for("main.index"))
 
 

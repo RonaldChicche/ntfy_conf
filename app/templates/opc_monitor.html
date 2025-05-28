@@ -48,21 +48,30 @@
     {% endfor %}
   </tbody>
 </table>
+{% endif %}
 
 <h5 class="mt-4">🔔 Nodos seleccionados para alarmas:</h5>
 <table class="table table-bordered" id="tabla-alarmas">
   <thead>
     <tr>
       <th>NodeId</th>
-      <th>Tipo de Dato</th>
       <th>Acciones</th>
     </tr>
   </thead>
-  <tbody></tbody>
+  <tbody>
+    {% for alarma in alarmas %}
+      <tr data-nodeid="{{ alarma.node_id }}">
+        <td><code>{{ alarma.node_id }}</code></td>
+        <td>
+          <button class="btn btn-sm btn-outline-danger eliminar-alarma">Eliminar</button>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
 </table>
 
 <button class="btn btn-success" id="activar-alarmas">✅ Activar monitoreo de alarmas</button>
-{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -102,7 +111,6 @@
   document.addEventListener('click', function (e) {
     if (e.target && e.target.classList.contains('agregar-alarma')) {
       const nodeId = e.target.getAttribute('data-nodeid');
-      const type = e.target.getAttribute('data-type');
 
       // Evita duplicados
       if (document.querySelector(`#tabla-alarmas tr[data-nodeid='${nodeId}']`)) return;
@@ -111,7 +119,6 @@
       row.setAttribute('data-nodeid', nodeId);
       row.innerHTML = `
         <td><code>${nodeId}</code></td>
-        <td>${type}</td>
         <td><button class="btn btn-sm btn-outline-danger eliminar-alarma">Eliminar</button></td>
       `;
       document.querySelector('#tabla-alarmas tbody').appendChild(row);

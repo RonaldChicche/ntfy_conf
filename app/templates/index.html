@@ -3,13 +3,7 @@
 {% block title %}Mini App Flask{% endblock %}
 
 {% block content %}
-<h1 class="mb-4 text-center">Definición de Bits</h1>
-
-<!-- Formulario para agregar ítem -->
-<form action="/add" method="POST" class="d-flex mb-4">
-    <input type="text" name="definicion" placeholder="Definición" class="form-control me-2" required>
-    <button type="submit" class="btn btn-success">Agregar</button>
-</form>
+<h1 class="mb-4 text-center">Definición de Alertas</h1>
 
 <table class="table table-bordered">
     <thead>
@@ -24,14 +18,20 @@
     </thead>
     <tbody>
         {% for item in items %}
-        <tr>
+        <tr data-itemid="{{ item.id }}">
             <td>
                 <button class="btn btn-sm btn-link toggle-tags" data-bs-toggle="collapse" data-bs-target="#tags-{{ item.id }}">
                 ▶
                 </button>
                 {{ item.id }}
             </td>
-            <td>{{ item.estado }}</td>
+            <td class="estado-celda">
+                {% if item.estado|string == '1' %}
+                    <span class="estado-circulo estado-activo" title="Activo"></span>
+                {% else %}
+                    <span class="estado-circulo estado-inactivo" title="Inactivo"></span>
+                {% endif %}
+            </td>
             <!-- <td>{{ item.topico_rel.topico }}</td> -->
               <!-- Tópico -->
             <!-- Tópico -->
@@ -69,15 +69,15 @@
             </td>
             <td class="d-flex flex-wrap gap-1">
                 <!-- Eliminar -->
-                <a href="/delete_item/{{ item.id }}" class="btn btn-danger btn-sm">Eliminar</a>
+                <!-- <a href="/delete_item/{{ item.id }}" class="btn btn-danger btn-sm">Eliminar</a> -->
 
                 <!-- Cambiar estado -->
-                <form action="/change/{{ item.id }}" method="POST" class="d-inline">
+                <!-- <form action="/change/{{ item.id }}" method="POST" class="d-inline">
                     <input type="hidden" name="estado" value="{{ item.estado }}">
                     <button type="submit" class="btn btn-warning btn-sm">
                         {{ 'Inactivar' if item.estado == '1' else 'Activar' }}
                     </button>
-                </form>
+                </form> -->
 
                 <!-- Enviar a ntfy -->
                 <form action="/send" method="POST" class="d-inline">
@@ -95,13 +95,12 @@
             <td colspan="6">
                 <ul class="list-group" id="tag-list-{{ item.id }}">
                 {% for tag in item.tags_asociados %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>
-                    <strong>{{ tag.nombre }}</strong> — {{ tag.direccion }}
-                    </span>
-                    <button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalEditTag{{ tag.id }}">
-                    Editar
-                    </button>
+                <li class="list-group-item">
+                    <form method="POST" action="{{ url_for('main.update_tag_nombre', tag_id=tag.id) }}" class="d-flex align-items-center gap-3">
+                    <input type="text" name="nombre" value="{{ tag.nombre }}" class="form-control form-control-sm w-50" required>
+                    <span class="text-muted">{{ tag.direccion }}</span>
+                    <button type="submit" class="btn btn-sm btn-success ms-auto">Actualizar</button>
+                    </form>
                 </li>
                 {% endfor %}
                 </ul>
@@ -126,23 +125,34 @@
 <script>
   async function actualizarItems() {
     try {
-      const response = await fetch("/items/json");  // Nueva ruta que debes crear
+      const response = await fetch("/items/json");  // Asegúrate de que esta ruta existe y devuelve JSON con id y estado
       const data = await response.json();
+      //console.log('data', data);
 
       data.forEach(item => {
-        const rows = document.querySelectorAll("table tbody tr");
-        rows.forEach(row => {
-          const idCell = row.querySelector("td:first-child");
-          const estadoCell = row.querySelector("td:nth-child(2)");
-          if (idCell && idCell.textContent == item.id.toString()) {
-            if (estadoCell.textContent !== item.estado) {
-              estadoCell.textContent = item.estado;
-              estadoCell.classList.add("bg-success", "text-white");
-              setTimeout(() => estadoCell.classList.remove("bg-success", "text-white"), 1000);
-            }
+        const row = document.querySelector(`tr[data-itemid="${item.id}"]`);
+        //console.log('row: ', row);
+        if (!row) return;
+
+        const estadoCell = row.querySelector(".estado-celda");
+        const circulo = estadoCell?.querySelector(".estado-circulo");
+
+        if (circulo) {
+          const activo = item.estado === "1";
+
+          // Solo actualiza si hay un cambio real
+          const estabaActivo = circulo.classList.contains("estado-activo");
+          if (activo !== estabaActivo) {
+            circulo.classList.toggle("estado-activo", activo);
+            circulo.classList.toggle("estado-inactivo", !activo);
+
+            // Efecto visual temporal (brillo verde)
+            estadoCell.classList.add("bg-success", "text-white");
+            setTimeout(() => estadoCell.classList.remove("bg-success", "text-white"), 1000);
           }
-        });
+        }
       });
+
     } catch (error) {
       console.error("❌ Error al hacer polling:", error);
     }
@@ -151,40 +161,4 @@
   setInterval(actualizarItems, 1000);  // Llama cada segundo
 </script>
 
-<!-- <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-
-<script>
-  
-    console.log("index script function ...")
-
-    // Socket global único
-    if (!window.socket) {
-        window.socket = io();
-
-        window.socket.on('connect', () => {
-            console.log("🟢 Socket conectado desde base.html");
-        });
-
-        window.socket.on('item_update', data => {
-            console.log("📡 Cambio recibido:", data);
-            const rows = document.querySelectorAll("table tbody tr");
-            rows.forEach(row => {
-                const idCell = row.querySelector("td:first-child");
-                const estadoCell = row.querySelector("td:nth-child(2)");
-                if (idCell && idCell.textContent == data.node_id) {
-                    estadoCell.textContent = data.estado;
-                    estadoCell.classList.add("bg-success", "text-white");
-                    setTimeout(() => estadoCell.classList.remove("bg-success", "text-white"), 1000);
-                }
-            });
-        });
-    }
-
-
-    window.socket.onAny((event, ...args) => {
-        console.log("📦 Evento recibido base:", event, args);
-    });
-
-    
-</script> -->
 {% endblock %}

@@ -1,8 +1,11 @@
 {
-  "PLC_DWORD_VALUE": 10,
-  "OPC_SERVER_URL": "opc.tcp://ronald_desk:62640/IntegrationObjects/ServerSimulator",
-  "OPC_USER": null,
-  "OPC_PASSWORD": null,
-  "TAGS_NODE": "ns=2;s=Realtimedata",
-  "NTFY_URL": "https://ntfy.bertek.app/"
+    "PLC_DWORD_VALUE": 10,
+    "OPC_SERVER_URL": "opc.tcp://ronald_desk:62640/IntegrationObjects/ServerSimulator",
+    "OPC_USER": null,
+    "OPC_PASSWORD": null,
+    "TAGS_NODE": "ns=2;s=Realtimedata",
+    "TAGS_SUBSCRIBE": [
+        "ns=2;s=Tag_Write1"
+    ],
+    "NTFY_URL": "https://ntfy.bertek.app/"
 }

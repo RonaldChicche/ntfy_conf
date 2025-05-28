@@ -2,8 +2,10 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 #from flask_socketio import SocketIO
 from flask_migrate import Migrate
-from app.config import get_env
+from app.config import get_env, get_config_value
 from app.utils import insertar_prioridades
+#from app.routes.opc_routes import opc_client
+#from app.opc_handler import OpcUaClient
 
 import os
 
@@ -28,5 +30,6 @@ def create_app():
     with app.app_context():
         db.create_all()  # Crea las tablas si no existen
         insertar_prioridades()
+
 
     return app

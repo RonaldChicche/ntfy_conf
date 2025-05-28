@@ -1,8 +1,11 @@
-from opcua import Client
+from opcua import Client, ua
 from flask import current_app
 from typing import Optional
 from app.database import crud
-from app.database.models import db, Item
+from app.database.models import db
+from app.config import get_config_value
+
+import requests
 
 
 def int_to_bits(value, bits=16):
@@ -19,21 +22,24 @@ class WebAlarmHandler:
         self.app = app
 
     def datachange_notification(self, node, val, data):
-        parent_id = node.nodeid.to_string()
-        print(f"⚡ Cambio detectado en {parent_id} => {val}")
+        node_id = node.nodeid.to_string()
+        print(f"⚡ Cambio detectado en {node_id} => {val}")
 
         try:
             bits = bits_from_value(val)
             with self.app.app_context():
                 for i, bit_val in enumerate(bits):
-                    bit_node_id = f"{parent_id}[{i}]"
-                    item = Item.query.filter_by(node_id=bit_node_id).first()
+                    item = crud.get_item_by_order_and_node_id(db.session, i, node_id)
                     if item:
+                        print(f"🟡 Actualizando nodo {node_id} item {item.id} con estado {bit_val}")
+                        if item.estado == '0' and bit_val == 1:
+                            # send notification to ntfy /send
+                            requests.post("http://localhost:5000/send", json={"item_id": item.id})
                         item.estado = str(bit_val)
                         db.session.add(item)
                 db.session.commit()
             # get handle and bits
-            handle = data.ClientHandle
+            handle = data.monitored_item.ClientHandle
             print("Handle:", handle, "Bits:", bits)
         except Exception as e:
             print("❌ Error actualizando bits:", e)
@@ -74,8 +80,8 @@ class OpcUaClient:
     def disconnect(self):
         """Cierra conexión y libera recursos."""
         try:
-            self._cancel_all_subscriptions()
             if self.is_connected:
+                self._cancel_all_subscriptions()
                 self.client.disconnect()
                 print("🔌 Cliente OPC desconectado correctamente")
         except Exception as e:
@@ -83,11 +89,44 @@ class OpcUaClient:
         finally:
             self.is_connected = False
 
+    # restore subscriptions:
+    def restore_subscriptions(self):
+        # verificar si esta conectado
+        if not self.is_connected:
+            print("❌ No esta conectado")
+            return {"error": "No esta conectado", "status": "error"}
+
+        # Verificar si hay suscripciones en el config.json
+        suscripciones = get_config_value("TAGS_SUBSCRIBE")
+        if not suscripciones:
+            print("❌ No hay suscripciones en el config.json", suscripciones)
+            return {"error": "No hay suscripciones en el config.json", "status": "error"}
+
+        # Restaurar suscripciones
+        handler = WebAlarmHandler(app=current_app._get_current_object())
+        for suscripcion in suscripciones:
+            self.subscribe(suscripcion, handler)
+
+        # print subscripciones
+        print("✅ Suscripciones restauradas")
+        for handle in self.sub_handles:
+            print(f"📡 Suscripción {handle} restaurada")
+        
+        return {"message": "Suscripciones restauradas", "status": "success", "handles": self.sub_handles}
+
     def change_endpoint(self, new_endpoint):
         self.endpoint = new_endpoint
         print(f"🔌 Cambiando endpoint a {self.endpoint}")
         print("Usuario:", self.username)
         print("Contraseña:", self.password)
+        if self.is_connected:
+            self.disconnect()
+
+        self.client = Client(self.endpoint)
+
+        if self.username and self.password:
+            self.client.set_user(self.username)
+            self.client.set_password(self.password)
         try:
             self.client.connect()
             self.is_connected = True
@@ -153,14 +192,14 @@ class OpcUaClient:
     # 📖 LECTURA / ESCRITURA
     # =======================
 
-    def read(self, node_id: str):
-        """Lee el valor actual de un nodo OPC."""
-        try:
-            node = self.client.get_node(node_id)
+    def read(self, node_id, attribute="Value"):
+        node = self.client.get_node(node_id)
+        if attribute == "Value":
             return node.get_value()
-        except Exception as e:
-            print(f"❌ Error al leer {node_id}: {e}")
-            return None
+        elif attribute == "DataType":
+            return node.get_data_type_as_variant_type()
+        else:
+            return node.read_attribute(getattr(ua.AttributeIds, attribute))
 
     def write(self, node_id: str, value):
         """Escribe un valor en un nodo OPC."""
@@ -170,3 +209,51 @@ class OpcUaClient:
             print(f"✅ Escrito {value} en {node_id}")
         except Exception as e:
             print(f"❌ Error al escribir en {node_id}: {e}")
+
+    # get children if there are any
+    def get_children(self, node_id: str):
+        try:
+            node = self.client.get_node(node_id)
+            return node.get_children()
+        except Exception as e:
+            print(f"❌ Error al obtener hijos de {node_id}: {e}")
+            return None
+
+    # get node type
+    def get_node_info(self, node):
+        """Devuelve info básica del nodo: tipo, valor, timestamp, etc."""
+        info = {
+            "nodeid": node.nodeid.to_string(),
+            "type": "Unknown",
+            "data_type": None,
+            "value": None,
+            "server_timestamp": None,
+            "name": "Desconocido",
+            "has_value": False
+        }
+
+        try:
+            info["name"] = node.get_display_name().Text
+        except:
+            pass
+
+        try:
+            node_class = node.get_node_class()
+            if node_class == ua.NodeClass.Variable:
+                info["type"] = "Variable"
+                info["data_type"] = str(node.get_data_type_as_variant_type())
+                info["value"] = node.get_value()
+                info["server_timestamp"] = str(node.read_value().ServerTimestamp)
+                info["has_value"] = True
+            elif node_class == ua.NodeClass.Object:
+                info["type"] = "Object"
+            elif node_class == ua.NodeClass.Method:
+                info["type"] = "Method"
+            elif node_class == ua.NodeClass.Folder:
+                info["type"] = "Folder"
+            else:
+                info["type"] = str(node_class)
+        except Exception as e:
+            info["error"] = str(e)
+
+        return info
