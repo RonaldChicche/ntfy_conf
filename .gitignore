@@ -1,37 +1,14 @@
-# Archivos de compilación
-build/
-dist/
-
-# Archivos de prueba
-tests/
-
-# Archivos de documentación
-docs/
-
-# Archivos de logs
-logs/
-
-# Archivos de IDE
-.vscode/
-.pydevproject
-
-# Archivos de sistema
-.DS_Store
-Thumbs.db
-
-# Archivos de dependencias
-venv/
-env/
-requirements.txt
-
-# Archivos de cache
-__pycache__/
-.cache/
-
-# Archivos de Python
+# Entorno python
 *.pyc
-*.pyo
-*.pyd
+__pycache__/
+*.pyo 
+*pyd
 
-# Archivos de IPython
-.ipynb_checkpoints/
+# Temporales
+*.log
+*.tmp
+
+# De editor
+.vscode/
+.idea/
+
