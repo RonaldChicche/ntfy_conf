@@ -6,6 +6,8 @@ from app.database.models import db
 from app.config import get_config_value
 
 import requests
+import threading
+import queue
 
 
 def int_to_bits(value, bits=16):
@@ -20,6 +22,21 @@ def bits_from_value(value):
 class WebAlarmHandler:
     def __init__(self, app):
         self.app = app
+        self.task_queue = queue.Queue()
+        threading.Thread(target=self._worker_thread, daemon=True).start()
+
+    def _worker_thread(self):
+        while True:
+            item_id = self.task_queue.get()
+            try:
+                with self.app.app_context():
+                    print(f"🟡 Enviando POST para item {item_id}")
+                    requests.post("http://localhost:5000/send", json={"item_id": item_id})
+            except Exception as e:
+                import traceback
+                print(f"❌ Error al enviar POST para item {item_id}: {e}")
+                traceback.print_exc()
+            self.task_queue.task_done()
 
     def datachange_notification(self, node, val, data):
         node_id = node.nodeid.to_string()
@@ -33,8 +50,7 @@ class WebAlarmHandler:
                     if item:
                         print(f"🟡 Actualizando nodo {node_id} item {item.id} con estado {bit_val}")
                         if item.estado == '0' and bit_val == 1:
-                            # send notification to ntfy /send
-                            requests.post("http://localhost:5000/send", json={"item_id": item.id})
+                            self.task_queue.put(item.id)
                         item.estado = str(bit_val)
                         db.session.add(item)
                 db.session.commit()
@@ -192,15 +208,20 @@ class OpcUaClient:
     # 📖 LECTURA / ESCRITURA
     # =======================
 
-    def read(self, node_id, attribute="Value"):
-        node = self.client.get_node(node_id)
-        if attribute == "Value":
-            return node.get_value()
-        elif attribute == "DataType":
-            return node.get_data_type_as_variant_type()
-        else:
-            return node.read_attribute(getattr(ua.AttributeIds, attribute))
-
+    def read(self, node_id, attribute="Value", retrys=3):
+        for i in range(retrys):
+            try:   
+                node = self.client.get_node(node_id)
+                if attribute == "Value":
+                    return node.get_value()
+                elif attribute == "DataType":
+                    return node.get_data_type_as_variant_type()
+                else:
+                    return node.read_attribute(getattr(ua.AttributeIds, attribute))
+            except Exception as e:
+                print(f"❌ Error al leer {node_id} retry {i}: {e}")
+        return None
+            
     def write(self, node_id: str, value):
         """Escribe un valor en un nodo OPC."""
         try:

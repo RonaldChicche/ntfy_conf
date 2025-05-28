@@ -291,8 +291,11 @@ def configurar_alarmas():
     # 4. Guardar en config.json la nueva lista completa
     set_config_value("TAGS_SUBSCRIBE", nodos_enviados)
 
+    if errores: status = "error"
+    else: status = "ok"
+
     return jsonify({
-        'status': 'ok',
+        'status': status,
         'nodos_enviados': nodos_enviados,
         'nodos_creados': nodos_crear,
         'nodos_eliminados': nodos_eliminar,
